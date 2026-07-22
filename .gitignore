@@ -1,0 +1,22 @@
+# Python virtual environment
+cevd_env/
+
+# Trained model weights (large, don't belong in git history)
+models/*.h5
+
+# Logs / TensorBoard event files (can be large)
+logs/
+
+# Data (large raw datasets — check with your prof/team about how these should be shared instead)
+data/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# macOS system files
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
