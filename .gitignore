@@ -20,3 +20,4 @@ __pycache__/
 # IDE
 .vscode/
 .idea/
+!models/NeurADP+SoftplusPathBasedNN_500agent_4capacity_90delay_60interval_vanilla_0sta_24end_4startday_9endday_2trained.h5
