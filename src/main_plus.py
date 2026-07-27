@@ -193,7 +193,7 @@ if __name__ == '__main__':
     START_HOUR: int = 0
     END_HOUR: int = 24
     NUM_EPOCHS: int = 1
-    TRAINING_DAYS = [4, 9]
+    TRAINING_DAYS = [2, 3, 4, 7, 8, 9, 10, 11]
     VALID_DAYS: List[int] = [2]
     TEST_DAYS: List[int] = [13]
     VALID_FREQ: int = 1
@@ -208,7 +208,7 @@ if __name__ == '__main__':
 
     # Initialising components
     # TODO: Save start hour not start epoch
-    num_clusters = 2
+    num_clusters = 100
     envt = NYEnvironment(args.numagents, START_EPOCH=START_HOUR * 3600, STOP_EPOCH=END_HOUR * 3600, MAX_CAPACITY=args.capacity, EPOCH_LENGTH=args.decisioninterval, NUM_CLUSTERS=num_clusters)
     # TODO : Run K-Means on envt.travel_time and form the clusters
     # Pass this node, cluster dict to run_epoch

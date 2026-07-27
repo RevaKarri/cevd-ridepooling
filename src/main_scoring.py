@@ -272,7 +272,7 @@ if __name__ == '__main__':
     START_HOUR: int = 0
     END_HOUR: int = 24
     NUM_EPOCHS: int = 1
-    TRAINING_DAYS: List[int] = [4, 9]
+    TRAINING_DAYS: List[int] = [2, 3, 4, 7, 8, 9, 10, 11]
     VALID_DAYS: List[int] = [2]
     TEST_DAYS: List[int] = [15]
     VALID_FREQ: int = 1#4
@@ -344,22 +344,32 @@ if __name__ == '__main__':
     if(pre_trained):
         print("Using Trained Model")
         # train_file = '0.6batched{}_{}agent_{}capacity_{}delay_{}interval_vanilla_{}sta_{}end_{}startday_{}endday_{}trained.h5'.format(type(value_function).__name__, args.numagents, args.capacity, args.pickupdelay, args.decisioninterval, START_HOUR, END_HOUR, TRAINING_DAYS[0], TRAINING_DAYS[-1], 1)
-        train_file = 'NeurADP+Softplus{}_{}agent_{}capacity_{}delay_{}interval_vanilla_{}sta_{}end_{}startday_{}endday_{}trained.h5'.format(type(value_function).__name__, args.numagents, args.capacity, args.pickupdelay, args.decisioninterval, 0, 24, TRAINING_DAYS[0], TRAINING_DAYS[-1], 2)
-        #value_function.model.load_weights('../models/' + train_file)
+        train_file = 'NeurADP+Softplus{}_{}agent_{}capacity_{}delay_{}interval_vanilla_{}sta_{}end_{}startday_{}endday_{}trained.h5'.format(type(value_function).__name__, args.numagents, args.capacity, args.pickupdelay, args.decisioninterval, 0, 24, TRAINING_DAYS[0], TRAINING_DAYS[-1], len(TRAINING_DAYS))
+        value_function.model.load_weights('../models/' + train_file)
         # value_function.model.load_weights('../models/batched{}_{}agent_{}capacity_{}delay_{}interval_vanilla_{}sta_{}end_{}startday_{}endday_{}trained.h5'.format(type(value_function).__name__, 1000, args.capacity, 300, args.decisioninterval, 0, 24, TRAINING_DAYS[0], TRAINING_DAYS[-1], 1), by_name=True)
         # value_function.model.load_weights('../models/MADP{}_{}agent_{}capacity_{}delay_{}interval_{}numclusters_{}l_{}sta_{}end_{}startday_{}endday_{}trained.h5'.format(type(value_function).__name__, args.numagents, args.capacity, args.pickupdelay, args.decisioninterval, num_clusters, args.lamb, START_HOUR, END_HOUR, TRAINING_DAYS[0], TRAINING_DAYS[-1], 1))
 
-        for day in range(1,21):
-        
+        TEST_DAYS_TO_RUN = [14, 15, 16, 17, 18]
+        per_day_served = []
+        per_day_seen = []
+        for day in TEST_DAYS_TO_RUN:
+
             pickup_avg = run_epoch(envt, oracle, central_agent, kmeans, value_function, day, is_training=False, inter_cluster_distance=inter_cluster_distance, lamb=None, cont=True)
             print(pickup_avg)
             initial_states = envt.get_initial_states(envt.NUM_AGENTS, is_training=False)
             # print(min(initial_states))
             agents = [LearningAgent(agent_idx, initial_state) for agent_idx, initial_state in enumerate(initial_states)]
             total_requests_served = run_epoch(envt, oracle, central_agent, kmeans, value_function, day, is_training=False, agents_predefined=agents, inter_cluster_distance=inter_cluster_distance, predicted_demand=[0], pickup_avg=pickup_avg, a=args.a, b=args.b, alpha=args.alpha)
-            
+
             print("\n(TEST) DAY: {}, Requests: {}\n\n".format(day, total_requests_served))
+            per_day_served.append(total_requests_served)
+            per_day_seen.append(log['total_day_{}'.format(day)])
             LOG_FILE: str = '../logs/' + train_file + 'ExpRealMNeurADP+{}agent_{}capacity_{}delay_{}interval_{}test.npy'.format(args.numagents, args.capacity, args.pickupdelay, args.decisioninterval, day)
             np.save(LOG_FILE, log)
             log = {}
+
+        per_day_served = np.array(per_day_served, dtype='float64')
+        print("\nCEVD requests served per test day: {}".format(per_day_served.tolist()))
+        print("CEVD requests seen per test day: {}".format(per_day_seen))
+        print("CEVD mean requests served: {:.2f} +/- {:.2f}".format(per_day_served.mean(), per_day_served.std()))
                 

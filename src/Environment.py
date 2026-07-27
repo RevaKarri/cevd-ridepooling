@@ -10,6 +10,7 @@ from abc import ABCMeta, abstractmethod
 from pandas import read_csv
 from collections import deque
 from docplex.mp.model import Model  # type: ignore
+from cplex_bridge import solve as cplex_solve
 import re
 # from random import randint, random
 
@@ -144,7 +145,7 @@ class Environment(metaclass=ABCMeta):
         model.minimize(model.sum(assignments[agent_id, target_id] * self.get_travel_time(agents[agent_id].position.next_location, possible_targets[target_id].pickup) for target_id in range(len(possible_targets)) for agent_id in range(len(agents))))
 
         # Solve
-        solution = model.solve()
+        solution = cplex_solve(model)
         assert solution  # making sure that the model doesn't fail
 
         # Get the assigned targets
