@@ -3,7 +3,7 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
 from tensorflow.python.keras.backend import exp
-tf.compat.v1.disable_eager_execution()
+# tf.compat.v1.disable_eager_execution()  # disabled: caused unbounded TF graph growth / memory blowup over long runs (verified via side test)
 
 from enum import unique
 from Environment import NYEnvironment
@@ -43,7 +43,11 @@ def run_epoch(envt,
               a=None,
               b=None,
               alpha=None,
-              predicted_demand=None):
+              predicted_demand=None,
+              a_arr=None,
+              b_arr=None,
+              alpha_arr=None,
+              downsample=1):
 
     # cluster info 
     reality_history = []
@@ -70,24 +74,27 @@ def run_epoch(envt,
         initial_states = envt.get_initial_states(envt.NUM_AGENTS, is_training)
         agents = [LearningAgent(agent_idx, initial_state) for agent_idx, initial_state in enumerate(initial_states)]
 
-    b_arr = [0, 0, 0, 0, 0, 0, 0, 0]
-    # Estimated lambda, alpha values
-    if(args.numagents == 500 and args.capacity == 4 and args.pickupdelay == 90):
-        a_arr = [-0.65, -0.45, -0.55, -0.6, -0.55, -0.55, -0.6, -0.55]
-        alpha_arr = [7.0, 8.0, 5.0, -10.0, 0.0, -10.0, 10.0, -10.0]
-    elif(args.numagents == 500 and args.capacity == 5 and args.pickupdelay == 90):
-        a_arr = [-0.65, -0.55, -0.5, -0.5, -0.55, -0.45, -0.5, -0.55]
-        alpha_arr = [-4.0, 5.0, 0.0, 0.0, 5.0, 3.0, 5.0, 6.0]
-    elif(args.numagents == 500 and args.capacity == 4 and args.pickupdelay == 120):
-        a_arr = [-0.65, -0.55, -0.55, -0.6, -0.6, -0.55, -0.55, -0.55]
-        alpha_arr = [-3.0, 0.0, 4.0, 3.0, -4.0, -7.0, 6.0, 0.0]
-    elif(args.numagents == 500 and args.capacity == 4 and args.pickupdelay == 150):
-        a_arr = [-0.6, -0.2, -0.5, -0.5, -0.5, -0.45, -0.55, -0.45]
-        alpha_arr = [7.0, -7.0, 4.0, 6.0, 0.0, -4.0, 0.0, -5.0]
-    
+    if b_arr is None:
+        b_arr = [0, 0, 0, 0, 0, 0, 0, 0]
+    if a_arr is None or alpha_arr is None:
+        # Estimated lambda, alpha values (fallback: only reached when the
+        # caller doesn't supply overrides -- preserves existing CLI behavior)
+        if(args.numagents == 500 and args.capacity == 4 and args.pickupdelay == 90):
+            a_arr = [-0.4, -0.4, -0.4, -0.4, -0.4, -0.4, -0.4, -0.4]
+            alpha_arr = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        elif(args.numagents == 500 and args.capacity == 5 and args.pickupdelay == 90):
+            a_arr = [-0.65, -0.55, -0.5, -0.5, -0.55, -0.45, -0.5, -0.55]
+            alpha_arr = [-4.0, 5.0, 0.0, 0.0, 5.0, 3.0, 5.0, 6.0]
+        elif(args.numagents == 500 and args.capacity == 4 and args.pickupdelay == 120):
+            a_arr = [-0.65, -0.55, -0.55, -0.6, -0.6, -0.55, -0.55, -0.55]
+            alpha_arr = [-3.0, 0.0, 4.0, 3.0, -4.0, -7.0, 6.0, 0.0]
+        elif(args.numagents == 500 and args.capacity == 4 and args.pickupdelay == 150):
+            a_arr = [-0.6, -0.2, -0.5, -0.5, -0.5, -0.45, -0.55, -0.45]
+            alpha_arr = [7.0, -7.0, 4.0, 6.0, 0.0, -4.0, 0.0, -5.0]
+
 
     print("DAY: {}".format(DAY))
-    request_generator = envt.get_request_batch(DAY)
+    request_generator = envt.get_request_batch(DAY, downsample=downsample)
     total_value_generated = 0
     num_total_requests = 0
     while True:
@@ -262,6 +269,8 @@ if __name__ == '__main__':
     parser.add_argument('-a', '--a', type=float, default=1.0)
     parser.add_argument('-b', '--b', type=float, default=1.0)
     parser.add_argument('-l', '--alpha', type=float, default=1.0)
+    parser.add_argument('--uniform_a', type=float, default=None,
+                        help='override the hardcoded ladder with a uniform lambda for all 8 buckets (alpha=0)')
 
     args = parser.parse_args()
 
@@ -359,7 +368,9 @@ if __name__ == '__main__':
             initial_states = envt.get_initial_states(envt.NUM_AGENTS, is_training=False)
             # print(min(initial_states))
             agents = [LearningAgent(agent_idx, initial_state) for agent_idx, initial_state in enumerate(initial_states)]
-            total_requests_served = run_epoch(envt, oracle, central_agent, kmeans, value_function, day, is_training=False, agents_predefined=agents, inter_cluster_distance=inter_cluster_distance, predicted_demand=[0], pickup_avg=pickup_avg, a=args.a, b=args.b, alpha=args.alpha)
+            total_requests_served = run_epoch(envt, oracle, central_agent, kmeans, value_function, day, is_training=False, agents_predefined=agents, inter_cluster_distance=inter_cluster_distance, predicted_demand=[0], pickup_avg=pickup_avg, a=args.a, b=args.b, alpha=args.alpha,
+                                              a_arr=([args.uniform_a] * 8 if args.uniform_a is not None else None),
+                                              alpha_arr=([0.0] * 8 if args.uniform_a is not None else None))
 
             print("\n(TEST) DAY: {}, Requests: {}\n\n".format(day, total_requests_served))
             per_day_served.append(total_requests_served)

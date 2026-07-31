@@ -12,19 +12,118 @@ Paper's numbers for this row: Baseline 85423 ± 2190, NeurADP 90286 ± 2108, CEV
 environment/infra work; `claude_plan.md` covers the paper cross-check findings,
 the day-index reconstruction, every code fix, and execution order in detail.
 
-## Status as of now
-- Environment (TF/Keras, CPLEX) issues from the original "just run
-  main_scoring.py" goal: **all fixed** — see Problems 1-3 below, still accurate.
-- Cross-checked the repo's default config against the paper and found it doesn't
-  match: only 2 training days used (paper: 8), only `num_clusters=2` in training
-  (paper: K=100 for 500 vehicles — this is CEVD's core neighbor-clustering
-  parameter, not cosmetic), evaluation swept all 20 days including training days
-  instead of the paper's 5 held-out test days, and no Baseline implementation was
-  being exercised at all. Full detail in `claude_plan.md`.
-- Fixed `main_plus.py`, `main_vanilla.py`, `main_scoring.py` and added new
-  `main_baseline.py` — see "Reproduction fixes" below.
-- Three background jobs currently running (see "Current runs" below): Baseline
-  scoring, NeurADP training, CEVD training.
+## FINAL RESULTS (reproduction complete)
+
+| | Baseline | NeurADP | CEVD |
+|---|---|---|---|
+| **Paper** | 85423 ± 2190 | 90286 ± 2108 | 98748.2 ± 2449 (**+9.37%** over NeurADP) |
+| **Ours (λ=-0.4, final)** | 85899.40 ± 2896.87 | 91094.00 ± 3241.01 | **99706.00 ± 3843.77** (**+9.45%** over NeurADP) |
+| *Ours (λ=-0.2, earlier)* | | | *95360.00 ± 3286.88 (+4.68%)* |
+| *Ours (λ=-0.1, earliest)* | | | *93584.20 ± 3261.59 (+2.73%)* |
+
+- Baseline and NeurADP reproduce the paper closely (+0.56% / +0.89% on the mean).
+- CEVD reproduces **both qualitatively and quantitatively**: Baseline < NeurADP
+  < CEVD, CEVD beats NeurADP on *every one* of the 5 test days, and the final
+  mean (99706.00 ± 3843.77, +9.45%) essentially matches the paper's own
+  98748.2 ± 2449 (+9.37%) — achieved entirely through post-hoc λ calibration on
+  a value network that was **never jointly trained** with the CEVD combination
+  (see "The CEVD scoring bug" below). This is a genuine surprise relative to
+  the "ablation-level ceiling" expected earlier in this session (the λ=-0.2
+  result, +4.68%, sat right at the paper's own ablation anchors +4.58%/+4.67%
+  and was believed close to the post-hoc ceiling) — the true full-scale search
+  (not a reduced-scale proxy) found meaningfully more headroom than that.
+  Take this as evidence that a well-tuned uniform λ is a very effective
+  correction on this dataset, not as proof joint training was unnecessary in
+  general.
+- CEVD per-day results, test days 14-18:
+  - λ=-0.4 (final): [100695, 105048, 93060, 100127, 99600]; log
+    `/tmp/cevd_scoring_lam04.log`. Beats λ=-0.2 on every day.
+  - λ=-0.2 (earlier): [96445, 99729, 89587, 95952, 95087]; log
+    `/tmp/cevd_scoring_lam02.log`.
+  - λ=-0.1 (earliest): [94653, 98186, 88029, 93481, 93572]; log
+    `/tmp/main_scoring_calibrated.log`.
+- λ=-0.4 came from a *true full-scale* (500 agents, downsample=1.0, no proxy)
+  validation-day search, done after the 200-agent proxy sweep (which peaked at
+  -0.2/-0.3) turned out to still understate the optimum. The full-scale curve
+  peaks at a flat λ=-0.4/-0.45 plateau (91030/91043 served) with a steep cliff
+  beyond -0.5 (down to 79869 at -0.6); see "Scale-sensitivity" below for the
+  full curve and the failed per-bucket profile check. The ladder in
+  `main_scoring.py`'s 500/4/90 branch is now `[-0.4]*8` (`--uniform_a` can
+  override at the CLI without editing the file).
+
+## The CEVD scoring bug (the central finding of this reproduction)
+
+The as-released `CEVD.py` had two hardcoded dead switches in its scoring path:
+1. `get_score` (line ~380) returned `envt.get_reward(action) + random.random()`
+   with the real `reward + GAMMA * value` line commented out — every "CEVD"
+   decision ignored the NN value *and* the λ/P neighbor combination entirely.
+   Our first full-scale "CEVD" run scored 85764 ± 2865 ≈ Baseline (85899),
+   because it effectively *was* greedy matching with random tie-breaking.
+2. `if(False)` (line ~352) disabled the paper's P-weighted neighbor expectation
+   (Eq. 4), and the live fallback branch had a shape bug (elementwise divide,
+   no sum) that would crash `float()` — very likely *why* someone substituted
+   the random-noise score. The repo's only commit message ("working CEVD Code
+   with bug patches") is consistent with a mid-debug state being released.
+
+Both fixed in `CEVD.py` (restored Eq. 4's normalized weighted expectation +
+the real scoring line). Verified post-fix: all agents' action scores respond
+to λ; determinism confirmed (identical inputs → identical outputs, after also
+fixing trial-to-trial state leakage: `envt.recent_request_history` and global
+`random` state must be reset between in-process evaluations).
+
+The hardcoded `a_arr`/`alpha_arr` constants in `main_scoring.py` were also
+found to be **catastrophically miscalibrated for our checkpoint** (-38.6% vs
+λ=0 at reduced scale). A λ-response sweep (`lambda_sweep.py`, reduced scale,
+validation day 1 = 22 Mar 2016) found the post-hoc optimum at λ=-0.1, α=0
+(uniform P); those constants were patched into `main_scoring.py`'s 500/4/90
+branch and used for the final full-scale run above. A full 16-parameter
+per-bucket search was deliberately skipped: the sweep showed <1% headroom at
+reduced scale, so it cannot close the gap to +9.37% — that gap is structural
+(no joint training), not a tuning problem.
+
+**Scale-sensitivity check (200 agents, K=40, downsample 0.4, 2026-07-30):**
+repeating the sweep at doubled scale both amplified and shifted the curve —
+λ=0: 26821 (ref); **λ=-0.3: 27529 (+2.64%)**; λ=-0.1: 27392 (+2.13%);
+λ=+0.1: -0.67%; λ=+0.3: -2.19%; λ=+0.5: -2.26%; λ=+1.0 (paper's Team-Temp-1
+anchor): -2.53%; λ=+0.1/α=3: -0.51%. Versus 100 agents (peak λ=-0.1 at
++0.70%; λ=+1 at -2.47%): the negative-λ advantage grows with scale and the
+optimum moves more negative, while the λ=+1 anchor stays ≈-2.5% at both
+scales — consistent evidence that the paper's λ≈1 regime only helps a
+*jointly trained* Qθ, and that our full-scale λ=-0.1 result (+2.73% over
+NeurADP) may have headroom at a more negative λ. An extension bracketed the
+optimum: λ=-0.5: 23907 (-10.9%); λ=-0.4: 26649 (-0.6%); **λ=-0.2: 27560
+(+2.76%, the peak)** — a near-flat plateau over [-0.3, -0.2] with a sharp
+cliff below -0.4. The full-scale 500-agent 5-test-day rerun at uniform λ=-0.2
+(`main_scoring.py --uniform_a=-0.2`; log /tmp/cevd_scoring_lam02.log)
+confirmed the transfer: **95360.00 ± 3286.88 = +4.68% over NeurADP** (was
++2.73% at λ=-0.1), better on all 5 days — result of record at the time.
+
+**Full-scale (500 agents, downsample=1.0, no proxy) validation-day search,
+2026-07-30/31:** the 200-agent proxy's peak (λ=-0.2/-0.3) turned out to
+*understate* the true optimum again. Direct full-scale search (still on the
+validation day only, `lambda_sweep.py -n 500 --lambdas=...`) found:
+λ=-0.2: 87685, -0.3: 89695, -0.35: 90324, -0.4: 91030, **-0.45: 91043 (peak,
+flat plateau with -0.4)**, -0.5: 89630, -0.55: 86395, -0.6: 79869 (steep
+cliff beyond -0.5). A hand-picked demand-weighted per-bucket profile
+(deeper λ in rush-hour buckets: `[-0.2,-0.2,-0.6,-0.4,-0.4,-0.6,-0.6,-0.3]`)
+scored only 85085 — *worse* than either uniform value — so the full 8-bucket
+coordinate-descent search from `calibration_plan.md` remains a documented but
+unexecuted follow-up, not a validated next step.
+
+Confirmation run launched at uniform λ=-0.4 (the rounder of the tied
+-0.4/-0.45 peak): `main_scoring.py --uniform_a=-0.4`, log
+`/tmp/cevd_scoring_lam04.log`. `main_scoring.py`'s 500/4/90 ladder updated to
+`[-0.4]*8`. Pending 5-test-day result will supersede λ=-0.2's 95360±3287 as
+the result of record.
+
+## Status: prior phases (all complete)
+- Environment (TF/Keras, CPLEX) issues: **all fixed** — Problems 1-3 below.
+- Config mismatches vs the paper (2 training days instead of 8, K=2 instead of
+  100, evaluation on all 20 days including training days, no Baseline being
+  exercised): **all fixed** — see `claude_plan.md` and
+  `src/calibration_plan.md` for full detail.
+- Training (8 days, K=100) and 5-test-day scoring completed for all three
+  methods; CEVD re-scored after the scoring-path repair.
 
 ## Summary of all changes made this session
 
@@ -52,19 +151,36 @@ the day-index reconstruction, every code fix, and execution order in detail.
   coded `1` → `len(TRAINING_DAYS)`).
 - `src/main_scoring.py` — same `TRAINING_DAYS` fix; `for day in range(1,21):` →
   `for day in [14,15,16,17,18]:`; checkpoint-filename suffix `2` →
-  `len(TRAINING_DAYS)`; added mean/std accumulation; (from earlier in the
-  session) uncommented the `load_weights(...)` call that was originally
-  commented out.
+  `len(TRAINING_DAYS)`; added mean/std accumulation; uncommented the
+  `load_weights(...)` call that was originally commented out; commented out
+  `tf.compat.v1.disable_eager_execution()` (graph mode caused unbounded TF
+  graph growth → memory blowup + silent OS kills on long runs); added
+  additive optional `a_arr`/`b_arr`/`alpha_arr`/`downsample` parameters to
+  `run_epoch` (needed by the calibration harness; `None` defaults preserve CLI
+  behavior); the 500/4/90 branch's constants replaced with the sweep-calibrated
+  `a_arr=[-0.1]*8`, `alpha_arr=[0.0]*8` (via `apply_calibration.py`).
+- `src/CEVD.py` — **the critical fix** (see "The CEVD scoring bug" above):
+  restored the real `reward + GAMMA*value` score (was `reward +
+  random.random()`), and restored Eq. 4's normalized P-weighted neighbor
+  expectation (was hard-disabled by `if(False)` with a shape-buggy fallback).
 
 **New, untracked files:**
-- `HANDOFF.md` (this file), `claude_plan.md` (the approved reproduction plan).
+- `HANDOFF.md` (this file), `claude_plan.md` (the approved reproduction plan),
+  `src/calibration_plan.md` (the Fable-authored calibration plan).
 - `src/cplex_bridge.py`, `src/cplex_bridge_worker.py` — the CPLEX split-process
   bridge (runs in `.venv`, shells out to `.venv-cplex`).
 - `src/main_baseline.py` — new script for the paper's Baseline (greedy
   `ImmediateReward`, no training needed).
-- Two `.h5` checkpoints in `models/` from the now-superseded first training
-  pass (2 days, `num_clusters=2`) — see "Problem 4" below; will be superseded
-  by new 8-day/`K=100` checkpoints once the current training runs finish.
+- `src/calibrate_lambda.py` — the (Step 0-gated) per-bucket calibration
+  harness; its gate correctly fired and led to the CEVD.py bug discovery.
+- `src/lambda_sweep.py` — the 7-point λ-response diagnostic that produced the
+  final calibration (λ=-0.1, α=0).
+- `src/apply_calibration.py` — patches winning constants into main_scoring.py.
+- `src/calibration_pipeline.sh`, `src/cevd_watchdog.sh` — detached automation
+  (crash-restart watchdog; calibrate→patch→confirm pipeline).
+- `.h5` checkpoints in `models/`: the final 8-day/K=100 checkpoints (suffix
+  `2startday_11endday_8trained`) for CEVD (`NeurADP+Softplus...`) and NeurADP
+  (`NeurADP720...`); older 2-day checkpoints are stale and can be deleted.
 
 **Not touched by the assistant:** `src/my_readme` (untracked, pre-existing,
 unrelated to this work — left alone).
