@@ -3,7 +3,7 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
 from tensorflow.python.keras.backend import exp
-tf.compat.v1.disable_eager_execution()
+#tf.compat.v1.disable_eager_execution() 
 
 from enum import unique
 from Environment import NYEnvironment
@@ -345,11 +345,11 @@ if __name__ == '__main__':
         print("Using Trained Model")
         # train_file = '0.6batched{}_{}agent_{}capacity_{}delay_{}interval_vanilla_{}sta_{}end_{}startday_{}endday_{}trained.h5'.format(type(value_function).__name__, args.numagents, args.capacity, args.pickupdelay, args.decisioninterval, START_HOUR, END_HOUR, TRAINING_DAYS[0], TRAINING_DAYS[-1], 1)
         train_file = 'NeurADP+Softplus{}_{}agent_{}capacity_{}delay_{}interval_vanilla_{}sta_{}end_{}startday_{}endday_{}trained.h5'.format(type(value_function).__name__, args.numagents, args.capacity, args.pickupdelay, args.decisioninterval, 0, 24, TRAINING_DAYS[0], TRAINING_DAYS[-1], 2)
-        #value_function.model.load_weights('../models/' + train_file)
+        value_function.model.load_weights('../models/' + train_file)
         # value_function.model.load_weights('../models/batched{}_{}agent_{}capacity_{}delay_{}interval_vanilla_{}sta_{}end_{}startday_{}endday_{}trained.h5'.format(type(value_function).__name__, 1000, args.capacity, 300, args.decisioninterval, 0, 24, TRAINING_DAYS[0], TRAINING_DAYS[-1], 1), by_name=True)
         # value_function.model.load_weights('../models/MADP{}_{}agent_{}capacity_{}delay_{}interval_{}numclusters_{}l_{}sta_{}end_{}startday_{}endday_{}trained.h5'.format(type(value_function).__name__, args.numagents, args.capacity, args.pickupdelay, args.decisioninterval, num_clusters, args.lamb, START_HOUR, END_HOUR, TRAINING_DAYS[0], TRAINING_DAYS[-1], 1))
 
-        for day in range(1,21):
+        for day in range(11,21):
         
             pickup_avg = run_epoch(envt, oracle, central_agent, kmeans, value_function, day, is_training=False, inter_cluster_distance=inter_cluster_distance, lamb=None, cont=True)
             print(pickup_avg)
