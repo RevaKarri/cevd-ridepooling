@@ -224,7 +224,7 @@ if __name__ == '__main__':
     END_HOUR: int = 24
     NUM_EPOCHS: int = 1
     # TRAINING_DAYS: List[int] = list(range(3, 10))
-    TRAINING_DAYS = [4, 9]
+    TRAINING_DAYS = [2, 3, 4, 7, 8, 9, 10, 11]
     VALID_DAYS: List[int] = [2]
     TEST_DAYS: List[int] = list(range(12, 14))
     VALID_FREQ: int = 1
@@ -250,7 +250,7 @@ if __name__ == '__main__':
 
     if(pre_trained):
         print("Using Trained Model")
-        train_file = 'NeurADP720{}_{}agent_{}capacity_{}delay_{}interval_vanilla_{}sta_{}end_{}startday_{}endday_{}trained.h5'.format(type(value_function).__name__, args.numagents, args.capacity, args.pickupdelay, args.decisioninterval, START_HOUR, END_HOUR, TRAINING_DAYS[0], TRAINING_DAYS[-1], 1)
+        train_file = 'NeurADP720{}_{}agent_{}capacity_{}delay_{}interval_vanilla_{}sta_{}end_{}startday_{}endday_{}trained.h5'.format(type(value_function).__name__, args.numagents, args.capacity, args.pickupdelay, args.decisioninterval, START_HOUR, END_HOUR, TRAINING_DAYS[0], TRAINING_DAYS[-1], len(TRAINING_DAYS))
         # train_file = '0.6batched{}_{}agent_{}capacity_{}delay_{}interval_vanilla_{}sta_{}end_{}startday_{}endday_{}trained.h5'.format(type(value_function).__name__, args.numagents, args.capacity, args.pickupdelay, args.decisioninterval, START_HOUR, END_HOUR, 3, 3, 1)
         value_function.model.load_weights('../models/' + train_file)
 
@@ -259,19 +259,25 @@ if __name__ == '__main__':
         #     print("\n(TEST) DAY: {}, Requests: {}\n\n".format(day, total_requests_served))
         #     # test_score += total_requests_served
         
-        # for day in TEST_DAYS:
-
-        # for day in TEST_DAYS:
-        for day in [args.plot]:
+        TEST_DAYS_TO_RUN = [14, 15, 16, 17, 18]
+        per_day_served = []
+        per_day_seen = []
+        for day in TEST_DAYS_TO_RUN:
             # Initialising agents
             initial_states = envt.get_initial_states(envt.NUM_AGENTS, is_training=False)
-            # initial_states = np.load('../logs/2000agentinitialstates.npy',allow_pickle='TRUE')
             agents = [LearningAgent(agent_idx, initial_state) for agent_idx, initial_state in enumerate(initial_states)]
             total_requests_served = run_epoch(envt, oracle, central_agent, kmeans, value_function, day, is_training=False, agents_predefined=agents)
             print("\n(TEST) DAY: {}, Requests: {}\n\n".format(day, total_requests_served))
+            per_day_served.append(total_requests_served)
+            per_day_seen.append(log['total_day_{}'.format(day)])
             LOG_FILE: str = '../logs/' + train_file + 'scoreNeurADP{}agent_{}capacity_{}delay_{}interval_{}test.npy'.format(args.numagents, args.capacity, args.pickupdelay, args.decisioninterval, day)
             np.save(LOG_FILE, log)
             log = {}
+
+        per_day_served = np.array(per_day_served, dtype='float64')
+        print("\nNeurADP requests served per test day: {}".format(per_day_served.tolist()))
+        print("NeurADP requests seen per test day: {}".format(per_day_seen))
+        print("NeurADP mean requests served: {:.2f} +/- {:.2f}".format(per_day_served.mean(), per_day_served.std()))
         # for day in TEST_DAYS:
         #         for day in [15]:
         #             # Initialising agents
@@ -298,7 +304,6 @@ if __name__ == '__main__':
                 # if (envt.num_days_trained % VALID_FREQ == VALID_FREQ - 1):
                 #     test_score = 0
                 envt.num_days_trained += 1
-                break
             # for day in VALID_DAYS:
             #     total_requests_served = run_epoch(envt, oracle, central_agent, kmeans, value_function, day, is_training=False)
             #     print("\n(TEST) DAY: {}, Requests: {}\n\n".format(day, total_requests_served))

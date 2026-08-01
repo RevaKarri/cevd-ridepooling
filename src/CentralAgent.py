@@ -7,6 +7,7 @@ from typing import List, Dict, Tuple, Set, Any, Optional, Callable
 
 from docplex.mp.model import Model  # type: ignore
 from docplex.mp.linear import Var  # type: ignore
+from cplex_bridge import solve as cplex_solve
 from random import gauss, shuffle, randint, random
 
 import time
@@ -127,7 +128,7 @@ class CentralAgent(object):
 
         # Solve ILP
         # sta = time.perf_counter()
-        solution = model.solve()
+        solution = cplex_solve(model)
         # fin = time.perf_counter()
         # print(fin-sta)
         assert solution  # making sure that the model doesn't fail
