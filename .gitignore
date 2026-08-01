@@ -1,5 +1,6 @@
 # Python virtual environment
 cevd_env/
+.venv/
 
 # Trained model weights (large, don't belong in git history)
 models/*.h5

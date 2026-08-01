@@ -348,14 +348,14 @@ class NeuralNetworkBased(ValueFunction):
                         all_g_clusters = request_clusters[j]
                         P_fg = tf.gather(P[f], all_g_clusters)
                         V_f_j = tf.tensordot(P_fg, tf.reshape(expected_future_values_all_agents[j], [-1]), 1)
-                        #if(sum(P_fg)> 0):
-                        if(False):
-                            V_f_j = V_f_j / sum(P_fg)
-                            # print(P_fg / sum(P_fg))
+                        if(tf.reduce_sum(P_fg) > 0):
+                            # Paper Eq. 4: P^{j|i}-weighted expectation of neighbor j's values,
+                            # normalized to a proper conditional distribution. P entries are
+                            # exp(alpha*dist) > 0, so this branch always fires in practice.
+                            V_f_j = V_f_j / tf.reduce_sum(P_fg)
                         else:
-                            #V_f_j = sum(expected_future_values_all_agents[j]) / len(expected_future_values_all_agents[j])
-                            #print(expected_future_values_all_agents[j].shape[0]*expected_future_values_all_agents[j].shape[1])
-                            V_f_j = expected_future_values_all_agents[j] / (expected_future_values_all_agents[j].shape[0]*expected_future_values_all_agents[j].shape[1])
+                            # Fallback: uniform average of j's action values (scalar).
+                            V_f_j = tf.reduce_mean(expected_future_values_all_agents[j])
                         marginal_f.append(V_f_j)
                     all_marginals[f] = marginal_f
                 # Now calculate Post Action Values
@@ -376,8 +376,10 @@ class NeuralNetworkBased(ValueFunction):
                 count3 += 1
     
         def get_score(action: Action, value: float):
-            #return self.envt.get_reward(action) + self.GAMMA * value
-            return self.envt.get_reward(action) + random.random()
+            # Was `reward + random.random()` with the real line commented out --
+            # which silently discarded the NN value AND the whole lambda/P
+            # combination, making "CEVD" score as greedy-with-random-tie-breaks.
+            return self.envt.get_reward(action) + self.GAMMA * value
 
         feasible_actions_all_agents = [feasible_actions for experience in experiences for feasible_actions in experience.feasible_actions_all_agents]
 
