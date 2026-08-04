@@ -259,7 +259,7 @@ if __name__ == '__main__':
         #     print("\n(TEST) DAY: {}, Requests: {}\n\n".format(day, total_requests_served))
         #     # test_score += total_requests_served
         
-        TEST_DAYS_TO_RUN = [14, 15, 16, 17, 18]
+        TEST_DAYS_TO_RUN = [30, 31, 32, 33, 34]
         per_day_served = []
         per_day_seen = []
         for day in TEST_DAYS_TO_RUN:

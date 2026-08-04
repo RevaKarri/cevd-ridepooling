@@ -358,7 +358,7 @@ if __name__ == '__main__':
         # value_function.model.load_weights('../models/batched{}_{}agent_{}capacity_{}delay_{}interval_vanilla_{}sta_{}end_{}startday_{}endday_{}trained.h5'.format(type(value_function).__name__, 1000, args.capacity, 300, args.decisioninterval, 0, 24, TRAINING_DAYS[0], TRAINING_DAYS[-1], 1), by_name=True)
         # value_function.model.load_weights('../models/MADP{}_{}agent_{}capacity_{}delay_{}interval_{}numclusters_{}l_{}sta_{}end_{}startday_{}endday_{}trained.h5'.format(type(value_function).__name__, args.numagents, args.capacity, args.pickupdelay, args.decisioninterval, num_clusters, args.lamb, START_HOUR, END_HOUR, TRAINING_DAYS[0], TRAINING_DAYS[-1], 1))
 
-        TEST_DAYS_TO_RUN = [14, 15, 16, 17, 18]
+        TEST_DAYS_TO_RUN = [30, 31, 32, 33, 34]
         per_day_served = []
         per_day_seen = []
         for day in TEST_DAYS_TO_RUN:

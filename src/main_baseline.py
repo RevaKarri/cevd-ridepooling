@@ -109,7 +109,7 @@ if __name__ == '__main__':
 
     START_HOUR: int = 0
     END_HOUR: int = 24
-    TEST_DAYS_TO_RUN = [14, 15, 16, 17, 18]
+    TEST_DAYS_TO_RUN = [30, 31, 32, 33, 34]
     log = {}
 
     num_clusters = 2

@@ -128,7 +128,8 @@ class CentralAgent(object):
 
         # Solve ILP
         # sta = time.perf_counter()
-        solution = cplex_solve(model)
+        #solution = cplex_solve(model)
+        solution = model.solve()
         # fin = time.perf_counter()
         # print(fin-sta)
         assert solution  # making sure that the model doesn't fail
