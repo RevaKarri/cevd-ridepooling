@@ -15,7 +15,7 @@ Usage:
               2016-01-14:29 \
               2016-01-22:30 2016-01-23:31 2016-01-24:32 2016-01-25:33 2016-01-26:34
 """
-
+ 
 import argparse
 import os
 from collections import defaultdict
