@@ -12,6 +12,7 @@ from collections import deque
 from docplex.mp.model import Model  # type: ignore
 from cplex_bridge import solve as cplex_solve
 import re
+import os
 # from random import randint, random
 
 import random
@@ -127,6 +128,7 @@ class Environment(metaclass=ABCMeta):
 
         # Solve an LP to assign each agent to closest possible target
         model = Model()
+        model.context.cplex_parameters.threads = os.cpu_count()
 
         # Define variables, a matrix defining the assignment of agents to targets
         assignments = model.continuous_var_matrix(range(len(agents)), range(len(possible_targets)), name='assignments')

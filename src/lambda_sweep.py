@@ -28,7 +28,7 @@ from Request import Request
 
 import argparse
 parser = argparse.ArgumentParser()
-parser.add_argument('-n', '--numagents', type=int, default=100)
+parser.add_argument('-n', '--numagents', type=int, default=500)
 parser.add_argument('-l', '--lambdas', type=str, default=None,
                     help='comma-separated lambda values (alpha=0) overriding the default grid')
 parser.add_argument('-p', '--profile', type=str, default=None,
@@ -47,7 +47,7 @@ CALIB_NUM_AGENTS = sweep_args.numagents
 # scale demand by the same ratio as the fleet, so per-agent supply/demand
 # balance matches the real 500-agent regime.
 CALIB_NUM_CLUSTERS = max(2, round(CALIB_NUM_AGENTS / 5))
-VALIDATION_DAY = 1
+VALIDATION_DAY = 31
 DOWNSAMPLE = CALIB_NUM_AGENTS / 500.0
 
 FILE_TAG = '{}agents'.format(CALIB_NUM_AGENTS) + ('_ext' if sweep_args.lambdas else '') + ('_profile' if sweep_args.profile else '')
@@ -124,16 +124,29 @@ def evaluate(a_val, alpha_val, label, a_arr_override=None):
 
 # lambda=0 reference is already known from the Step 0 run (10585) but re-run it
 # here so every point in the curve comes from one process/context.
+# CANDIDATES = [
+#     (0.0,  0.0, "lambda=0 (reference)"),
+#     (-0.3, 0.0, "lambda=-0.3"),
+#     (-0.1, 0.0, "lambda=-0.1"),
+#     (0.1,  0.0, "lambda=+0.1"),
+#     (0.3,  0.0, "lambda=+0.3"),
+#     (0.5,  0.0, "lambda=+0.5"),
+#     (1.0,  0.0, "lambda=+1.0 (paper's Team-Temp-1 anchor)"),
+#     (0.1,  3.0, "lambda=+0.1, alpha=3 (distance-weighted P)"),
+# ]
+
+# CANDIDATES grid, centered on -0.4 to check storm-day optimum 
 CANDIDATES = [
     (0.0,  0.0, "lambda=0 (reference)"),
-    (-0.3, 0.0, "lambda=-0.3"),
-    (-0.1, 0.0, "lambda=-0.1"),
-    (0.1,  0.0, "lambda=+0.1"),
+    (-0.4, 0.0, "lambda=-0.4 (current patched value)"),
+    (-0.6, 0.0, "lambda=-0.6"),
+    (-0.8, 0.0, "lambda=-0.8"),
+    (-1.0, 0.0, "lambda=-1.0"),
+    (-1.2, 0.0, "lambda=-1.2"),
     (0.3,  0.0, "lambda=+0.3"),
-    (0.5,  0.0, "lambda=+0.5"),
-    (1.0,  0.0, "lambda=+1.0 (paper's Team-Temp-1 anchor)"),
-    (0.1,  3.0, "lambda=+0.1, alpha=3 (distance-weighted P)"),
+    (1.0,  0.0, "lambda=+1.0 (paper's anchor)"),
 ]
+
 if sweep_args.lambdas:
     CANDIDATES = [(float(x), 0.0, "lambda={:+g}".format(float(x)))
                   for x in sweep_args.lambdas.split(',')]
